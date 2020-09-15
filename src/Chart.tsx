@@ -16,13 +16,14 @@ const getGrid = (min: number, max: number, delimiter: number) =>
   );
 
 export const Chart: React.FC<{
+  dataIndex: number;
   pointsToPlot: Point[];
   linesToPlot: Line[];
   labelMap: LabelMap;
-}> = ({ pointsToPlot, linesToPlot, labelMap }) => {
+}> = ({ dataIndex, pointsToPlot, linesToPlot, labelMap }) => {
   const d3Container = useRef(null);
 
-  console.log(labelMap);
+  // console.log(pointsToPlot, linesToPlot, labelMap)
 
   /**
    * The useEffect hooks is running side effects outside of React,
@@ -48,10 +49,6 @@ export const Chart: React.FC<{
           // @ts-ignore
           .range(colors);
 
-        console.log(
-          Math.min(...pointsToPlot.map((p) => p.x)),
-          d3.max(pointsToPlot.map((p) => p.x))
-        );
         const [xMin, xMax] = [
           Math.min(...pointsToPlot.map((p) => p.x)) - 10000,
           Math.max(...pointsToPlot.map((p) => p.x)) + 10000,
@@ -69,109 +66,122 @@ export const Chart: React.FC<{
           // @ts-ignore
           .range([PADDING, d3Container.current.clientHeight - 1.5 * PADDING]);
 
-        const xGrid = svg
-          .append('g')
-          .attr('class', 'x-grid')
-          .selectAll('line')
-          .data(getGrid(xMin, xMax, 10000));
-        xGrid
+        // x-axis grid
+        if (!svg.selectAll('g.x-axis').size()) svg.append('g').attr('class', 'x-axis');
+        const xAxisGroup = svg.select('g.x-axis');
+        const xAxis = xAxisGroup.selectAll('line').data(getGrid(xMin, xMax, 10000));;
+        const xLines = xAxis
           .enter()
           .append('line')
+          .attr('stroke', '#eee')
+          .attr('stroke-dasharray', 2)
+          .attr('x1', (d) => x(d))
+          .attr('x2', (d) => x(d))
+          .attr('y1', (d) => y(yMin))
+          .attr('y2', (d) => y(yMax));
+        xLines
           .attr('x1', (d) => x(d))
           .attr('x2', (d) => x(d))
           .attr('y1', (d) => y(yMin))
           .attr('y2', (d) => y(yMax))
-          .attr('stroke', '#eee')
-          .attr('stroke-dasharray', 2);
-        xGrid
+        const xLabels = xAxis
           .enter()
           .append('text')
-          .attr('x', (d) => x(d))
-          .attr('y', (d) => y(yMin - 3))
           .attr('font-size', 8)
           .attr('fill', '#aaa')
           .attr('text-anchor', 'middle')
-          .attr('alignment-baseline', 'hanging')
+          .attr('alignment-baseline', 'hanging');
+        xLabels
+          .attr('x', (d) => x(d))
+          .attr('y', (d) => y(yMin - 3))
           .text((d) => `${d / 1000}k`);
-        xGrid.exit().remove();
+        xAxis.exit().remove();
 
-        const yGrid = svg
-          .append('g')
-          .attr('class', 'y-grid')
-          .selectAll('line')
-          .data(getGrid(yMin, yMax, 10));
-        yGrid
+        // y-axis grid
+        if (!svg.selectAll('g.y-axis').size()) svg.append('g').attr('class', 'y-axis');
+        const yAxisGroup = svg.select('g.y-axis');
+        const yAxis = yAxisGroup.selectAll('line').data(getGrid(yMin, yMax, 10));;
+        const yLines = yAxis
           .enter()
           .append('line')
+          .attr('stroke', '#eee')
+          .attr('stroke-dasharray', 2)
           .attr('x1', x(xMin))
           .attr('x2', (d) => x(xMax))
           .attr('y1', (d) => y(d))
           .attr('y2', (d) => y(d))
-          .attr('stroke', '#eee')
-          .attr('stroke-dasharray', 2);
-        yGrid
+        yLines
+          .attr('x1', x(xMin))
+          .attr('x2', (d) => x(xMax))
+          .attr('y1', (d) => y(d))
+          .attr('y2', (d) => y(d))
+        const yLabels = yAxis
           .enter()
           .append('text')
-          .attr('x', x(xMin - 2000))
-          .attr('y', (d) => y(d))
           .attr('font-size', 8)
           .attr('fill', '#aaa')
           .attr('text-anchor', 'end')
-          .attr('alignment-baseline', 'middle')
+          .attr('alignment-baseline', 'middle');
+        yLabels
+          .attr('x', x(xMin - 2000))
+          .attr('y', (d) => y(d))
           .text((d) => d);
-        yGrid.exit().remove();
+        yAxis.exit().remove();
 
-        const key = svg
-          .append('g')
-          .attr('class', 'key')
-          .selectAll('rect')
-          .data(
-            Object.entries(labelMap).map(([c, l]) => ({
-              color: parseInt(c),
-              label: l,
-            }))
-          );
-        key
+        // key groups
+        if (!svg.selectAll('g.key').size()) svg.append('g').attr('class', 'key');
+        const keyGroup = svg.select('g.key');
+        const key = keyGroup.selectAll('rect').data(
+          Object.entries(labelMap).map(([c, l]) => ({
+            color: parseInt(c),
+            label: l,
+          }))
+        );
+        const keyRects = key
           .enter()
           .append('rect')
+          .attr('width', 15)
+          .attr('height', 15)
+        keyRects
           .attr('fill', (d) => color(d.color))
           .attr('x', (d) => x(xMax) - 25)
           .attr('y', (_d, i) => y(yMin) - 25 - 20 * i)
-          .attr('width', 15)
-          .attr('height', 15)
-          .attr('text', 'hello');
-        key
-          .enter()
+        const keyLabels = key.enter()
           .append('text')
-          .text((d) => d.label)
+          .text(d => d.label)
           .attr('text-anchor', 'middle')
           .attr('alignment-baseline', 'middle')
           .attr('font-size', 8)
-          .attr('font-weight', 700)
+          .attr('font-weight', 700);
+        keyLabels
           .attr('x', (d) => x(xMax) - 18)
-          .attr('y', (_d, i) => y(yMin) - 17 - 20 * i);
+          .attr('y', (_d, i) => y(yMin) - 17 - 20 * i)
+        key.exit().remove();
 
-        const lines = svg
-          .append('g')
-          .attr('class', 'lines')
-          .selectAll('polyline')
-          .data(linesToPlot);
+        // lines to plot
+        if (!svg.selectAll('g.lines').size()) svg.append('g').attr('class', 'lines');
+        const linesGroup = svg.select('g.lines');
+        const lines = linesGroup.selectAll('polyline').data(
+          linesToPlot);
         lines
           .enter()
           .append('polyline')
+          .attr('fill', 'transparent')
+          .attr('stroke', d => color(d.color))
           .attr('points', (d) =>
             d.points.map(([a, b]) => `${x(a)},${y(b)}`).join(' ')
           )
-          .attr('fill', 'transparent')
-          .attr('stroke', (d) => color(d.color));
+        lines
+          .attr('stroke', d => color(d.color))
+          .attr('points', (d) =>
+            d.points.map(([a, b]) => `${x(a)},${y(b)}`).join(' ')
+          )
         lines.exit().remove();
 
-        // Bind D3 data
-        const dots = svg
-          .append('g')
-          .attr('class', 'points')
-          .selectAll('circle')
-          .data(pointsToPlot);
+        // points to plot in the form of dots
+        if (!svg.selectAll('g.dots').size()) svg.append('g').attr('class', 'dots');
+        const dotsGroup = svg.select('g.dots');
+        const dots = dotsGroup.selectAll('circle').data(pointsToPlot);
         dots
           .enter()
           .append('circle')
@@ -181,9 +191,13 @@ export const Chart: React.FC<{
           .attr('fill', (d) => color(d.color))
           .append('title')
           .text((d) => d.label);
-        // Update existing D3 elements
-        // update.attr('x', (d, i) => i * 40).text((d: number) => d);
+        dots
+          .attr('cx', (d) => x(d.x))
+          .attr('cy', (d) => y(d.y))
+          .attr('fill', (d) => color(d.color))
+          .select('title').text((d) => d.label);
         dots.exit().remove();
+
       }
     },
 

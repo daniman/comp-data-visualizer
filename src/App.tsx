@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Chart } from './Chart';
 
 /**
@@ -13,8 +13,8 @@ import { Chart } from './Chart';
  * First row of the CSV is reserved for labels, and is not
  * interpreted as data to plot; rather the labels for that data.
  */
-const labels = ['percentile', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
-const data = [
+const sampleLabels = ['percentile', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
+const sampleData = [
   [10, 100000, 115000, 125000, 150000, 170000, 185000],
   [25, 105000, 120000, 135000, 155000, 175000, 195000],
   [50, 115000, 124000, 150000, 165000, 185000, 210000],
@@ -38,43 +38,103 @@ export interface Line {
   color: number;
 }
 
-const labelMap: LabelMap = {};
-labels.forEach((l, i) => {
-  if (i !== 0) {
-    labelMap[i] = l;
-  }
-});
+function App() {
+  const [dataIndex, setDataIndex] = useState(0);
+  const [isDraggedOver, setIsDraggedOver] = useState(false);
+  const [labels, setLabels] = useState<string[]>(sampleLabels);
+  const [data, setData] = useState<number[][]>(sampleData);
 
-const linesCache: { [percentile: number]: number[][] } = {};
-const pointsToPlot: Point[] = [];
-data.forEach((row, i) => {
-  row.forEach((point, j) => {
-    if (j !== 0) {
-      pointsToPlot.push({
-        x: point,
-        y: row[0],
-        color: j,
-        label: `${row[0]}th percentile ${
-          labels[j]
-        }: $${point.toLocaleString()}`,
-      });
-
-      const pointsInLine = linesCache[j] || [];
-      pointsInLine.push([point, row[0]]); // x, y: percentile, comp
-      linesCache[j] = pointsInLine;
+  const labelMap: LabelMap = {};
+  labels.forEach((l, i) => {
+    if (i !== 0) {
+      labelMap[i] = l;
     }
   });
-});
 
-const linesToPlot = Object.entries(linesCache).map(([color, points]) => ({
-  color: parseInt(color),
-  points,
-}));
+  const linesCache: { [percentile: number]: number[][] } = {};
+  const pointsToPlot: Point[] = [];
+  data.forEach((row, i) => {
+    row.forEach((point, j) => {
+      if (j !== 0) {
+        pointsToPlot.push({
+          x: point,
+          y: row[0],
+          color: j,
+          label: `${row[0]}th percentile ${labels[j]
+            }: $${point.toLocaleString()}`,
+        });
 
-function App() {
+        const pointsInLine = linesCache[j] || [];
+        pointsInLine.push([point, row[0]]); // x, y: percentile, comp
+        linesCache[j] = pointsInLine;
+      }
+    });
+  });
+
+  const linesToPlot = Object.entries(linesCache).map(([color, points]) => ({
+    color: parseInt(color),
+    points,
+  }));
+
   return (
-    <div style={{ width: 700, height: 300, margin: '40px auto' }}>
+    <div
+      style={{
+        width: 700,
+        height: 300,
+        margin: '40px auto',
+        outline: isDraggedOver ? '4px dashed orange' : '4px solid transparent',
+        backgroundColor: isDraggedOver ? '#fafafa' : 'transparent',
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDraggedOver(true);
+      }}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        setIsDraggedOver(true);
+      }}
+      onDragEnd={(e) => {
+        e.preventDefault();
+        setIsDraggedOver(false);
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        setIsDraggedOver(false);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDraggedOver(false);
+
+        if (event.dataTransfer.files) {
+          const file = event.dataTransfer.files[0];
+          console.log(file);
+
+          if (file.type !== 'text/csv') {
+            console.log('Cannot process this file.');
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.addEventListener('load', function handleFileLoad(e) {
+            const data = e.target?.result;
+            if (typeof data === 'string') {
+              const rows = data.split('\n');
+              setLabels(rows[0].split(','));
+              setData(
+                rows
+                  .splice(1)
+                  .map((str) => str.split(',').map((i) => parseInt(i)))
+              );
+            }
+            reader.removeEventListener('load', handleFileLoad);
+          });
+          reader.readAsText(file);
+          setDataIndex(dataIndex + 1)
+        }
+      }}
+    >
       <Chart
+        dataIndex={dataIndex}
         pointsToPlot={pointsToPlot}
         linesToPlot={linesToPlot}
         labelMap={labelMap}
