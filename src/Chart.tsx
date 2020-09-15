@@ -16,12 +16,12 @@ const getGrid = (min: number, max: number, delimiter: number) =>
   );
 
 export const Chart: React.FC<{
-  dataIndex: number;
   pointsToPlot: Point[];
   linesToPlot: Line[];
   labelMap: LabelMap;
-}> = ({ dataIndex, pointsToPlot, linesToPlot, labelMap }) => {
+}> = ({ pointsToPlot, linesToPlot, labelMap }) => {
   const d3Container = useRef(null);
+  console.log(labelMap);
 
   // console.log(pointsToPlot, linesToPlot, labelMap)
 
@@ -49,9 +49,11 @@ export const Chart: React.FC<{
           // @ts-ignore
           .range(colors);
 
+
+        const [dxMin, dxMax] = [Math.min(...pointsToPlot.map((p) => p.x)), Math.max(...pointsToPlot.map((p) => p.x))]
         const [xMin, xMax] = [
-          Math.min(...pointsToPlot.map((p) => p.x)) - 10000,
-          Math.max(...pointsToPlot.map((p) => p.x)) + 10000,
+          dxMin - (dxMax - dxMin) / 10,
+          dxMax + (dxMax - dxMin) / 10,
         ];
         const x = d3
           .scaleLinear()
@@ -59,18 +61,25 @@ export const Chart: React.FC<{
           // @ts-ignore
           .range([1.5 * PADDING, d3Container.current.clientWidth - PADDING]);
 
-        const [yMin, yMax] = [0, 100];
+        const [dyMin, dyMax] = [Math.min(...pointsToPlot.map((p) => p.y)), Math.max(...pointsToPlot.map((p) => p.y))]
+        const yStep = (dyMax - dyMin) / 8;
+        const [yMin, yMax] = [
+          dyMin - yStep,
+          dyMax + yStep,
+        ];
         const y = d3
           .scaleLinear()
           .domain([yMax, yMin])
           // @ts-ignore
           .range([PADDING, d3Container.current.clientHeight - 1.5 * PADDING]);
+        console.log(y(50))
 
         // x-axis grid
         if (!svg.selectAll('g.x-axis').size()) svg.append('g').attr('class', 'x-axis');
         const xAxisGroup = svg.select('g.x-axis');
-        const xAxis = xAxisGroup.selectAll('line').data(getGrid(xMin, xMax, 10000));;
-        const xLines = xAxis
+        const xLines = xAxisGroup.selectAll('line').data(getGrid(xMin, xMax, 10000));;
+        const xLabels = xAxisGroup.selectAll('text').data(getGrid(xMin, xMax, 10000));;
+        xLines
           .enter()
           .append('line')
           .attr('stroke', '#eee')
@@ -84,24 +93,29 @@ export const Chart: React.FC<{
           .attr('x2', (d) => x(d))
           .attr('y1', (d) => y(yMin))
           .attr('y2', (d) => y(yMax))
-        const xLabels = xAxis
+        xLabels
           .enter()
           .append('text')
           .attr('font-size', 8)
           .attr('fill', '#aaa')
           .attr('text-anchor', 'middle')
-          .attr('alignment-baseline', 'hanging');
+          .attr('alignment-baseline', 'hanging')
+          .attr('x', (d) => x(d))
+          .attr('y', (d) => y(yMin) + 6)
+          .text((d) => `${d / 1000}k`);
         xLabels
           .attr('x', (d) => x(d))
-          .attr('y', (d) => y(yMin - 3))
+          .attr('y', (d) => y(yMin) + 6)
           .text((d) => `${d / 1000}k`);
-        xAxis.exit().remove();
+        xLines.exit().remove();
+        xLabels.exit().remove();
 
         // y-axis grid
         if (!svg.selectAll('g.y-axis').size()) svg.append('g').attr('class', 'y-axis');
         const yAxisGroup = svg.select('g.y-axis');
-        const yAxis = yAxisGroup.selectAll('line').data(getGrid(yMin, yMax, 10));;
-        const yLines = yAxis
+        const yLines = yAxisGroup.selectAll('line').data(getGrid(yMin, yMax, yStep));;
+        const yLabels = yAxisGroup.selectAll('text').data(getGrid(yMin, yMax, yStep));;
+        yLines
           .enter()
           .append('line')
           .attr('stroke', '#eee')
@@ -115,48 +129,65 @@ export const Chart: React.FC<{
           .attr('x2', (d) => x(xMax))
           .attr('y1', (d) => y(d))
           .attr('y2', (d) => y(d))
-        const yLabels = yAxis
+        yLabels
           .enter()
           .append('text')
           .attr('font-size', 8)
           .attr('fill', '#aaa')
           .attr('text-anchor', 'end')
-          .attr('alignment-baseline', 'middle');
+          .attr('alignment-baseline', 'middle')
+          .attr('x', x(xMin) - 6)
+          .attr('y', (d) => y(d))
+          .text((d) => d)
         yLabels
-          .attr('x', x(xMin - 2000))
+          .attr('x', x(xMin) - 6)
           .attr('y', (d) => y(d))
           .text((d) => d);
-        yAxis.exit().remove();
+        yLines.exit().remove();
+        yLabels.exit().remove();
 
         // key groups
         if (!svg.selectAll('g.key').size()) svg.append('g').attr('class', 'key');
         const keyGroup = svg.select('g.key');
-        const key = keyGroup.selectAll('rect').data(
-          Object.entries(labelMap).map(([c, l]) => ({
-            color: parseInt(c),
-            label: l,
-          }))
-        );
-        const keyRects = key
+        const labelArr = Object.entries(labelMap).map(([c, l]) => ({
+          color: parseInt(c),
+          label: l,
+        }));
+        console.log(labelArr);
+        const keyRects = keyGroup.selectAll('rect').data(labelArr);
+        const keyLabels = keyGroup.selectAll('text').data(labelArr);
+        keyRects
           .enter()
           .append('rect')
           .attr('width', 15)
           .attr('height', 15)
+          .attr('fill', (d) => color(d.color))
+          .attr('x', x(xMax) - 25)
+          .attr('y', (_d, i) => y(yMin) - 25 - 20 * i)
         keyRects
           .attr('fill', (d) => color(d.color))
-          .attr('x', (d) => x(xMax) - 25)
+          .attr('x', x(xMax) - 25)
           .attr('y', (_d, i) => y(yMin) - 25 - 20 * i)
-        const keyLabels = key.enter()
+        keyLabels.enter()
           .append('text')
-          .text(d => d.label)
           .attr('text-anchor', 'middle')
           .attr('alignment-baseline', 'middle')
           .attr('font-size', 8)
-          .attr('font-weight', 700);
-        keyLabels
-          .attr('x', (d) => x(xMax) - 18)
+          .attr('font-weight', 700)
+          .attr('x', x(xMax) - 18)
           .attr('y', (_d, i) => y(yMin) - 17 - 20 * i)
-        key.exit().remove();
+          .text(d => d.label);
+        keyLabels
+          .attr('text-anchor', 'middle')
+          .attr('alignment-baseline', 'middle')
+          .attr('font-size', 8)
+          .attr('font-weight', 700)
+          .text(d => d.label)
+          .attr('x', x(xMax) - 18)
+          .attr('y', (_d, i) => y(yMin) - 17 - 20 * i)
+        keyRects.exit().remove();
+        keyLabels.exit().remove();
+
 
         // lines to plot
         if (!svg.selectAll('g.lines').size()) svg.append('g').attr('class', 'lines');

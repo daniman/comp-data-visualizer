@@ -13,13 +13,12 @@ import { Chart } from './Chart';
  * First row of the CSV is reserved for labels, and is not
  * interpreted as data to plot; rather the labels for that data.
  */
-const sampleLabels = ['percentile', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6'];
+const sampleLabels = ['percentile', '1', '2', '3', '4', '5'];
 const sampleData = [
-  [10, 100000, 110000, 120000, 130000, 140000, 150000],
-  [25, 110000, 120000, 130000, 140000, 150000, 160000],
-  [50, 120000, 130000, 140000, 150000, 160000, 170000],
-  [75, 130000, 140000, 150000, 160000, 170000, 180000],
-  [90, 140000, 150000, 160000, 170000, 180000, 190000],
+  [2, 100000, 110000, 120000, 130000, 140000],
+  [4, 110000, 120000, 130000, 140000, 150000],
+  [6, 120000, 130000, 140000, 150000, 160000],
+  [8, 130000, 140000, 150000, 160000, 170000],
 ];
 
 export interface LabelMap {
@@ -39,7 +38,6 @@ export interface Line {
 }
 
 function App() {
-  const [dataIndex, setDataIndex] = useState(0);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
   const [labels, setLabels] = useState<string[]>(sampleLabels);
   const [data, setData] = useState<number[][]>(sampleData);
@@ -60,8 +58,9 @@ function App() {
           x: point,
           y: row[0],
           color: j,
-          label: `${row[0]}th percentile ${labels[j]
-            }: $${point.toLocaleString()}`,
+          // label: `${row[0]}th percentile ${labels[j]
+          //   }: $${point.toLocaleString()}`,
+          label: `x ${point.toLocaleString()} –– y ${row[0]} –– z ${labels[j]}`,
         });
 
         const pointsInLine = linesCache[j] || [];
@@ -129,12 +128,10 @@ function App() {
             reader.removeEventListener('load', handleFileLoad);
           });
           reader.readAsText(file);
-          setDataIndex(dataIndex + 1)
         }
       }}
     >
       <Chart
-        dataIndex={dataIndex}
         pointsToPlot={pointsToPlot}
         linesToPlot={linesToPlot}
         labelMap={labelMap}
