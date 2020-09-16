@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from "react";
-import { Point, Line, LabelMap } from "./App";
+import { GraphPoint, GraphLine, LabelMap, UserPoint, UserLine } from "./App";
 import * as d3 from "d3";
 
 const PADDING = 20; // pixels
@@ -16,14 +16,19 @@ const getGrid = (min: number, max: number, delimiter: number) =>
   );
 
 export const Chart: React.FC<{
-  datumsToPlot: number[][];
-  pointsToPlot: Point[];
-  linesToPlot: Line[];
-  labelMap: LabelMap;
-}> = ({ datumsToPlot, pointsToPlot, linesToPlot, labelMap }) => {
+  userPointsToPlot: UserPoint[];
+  userLinesToPlot: UserLine[];
+  graphPointsToPlot: GraphPoint[];
+  graphLinesToPlot: GraphLine[];
+  graphLabelMap: LabelMap;
+}> = ({
+  userPointsToPlot,
+  userLinesToPlot,
+  graphPointsToPlot,
+  graphLinesToPlot,
+  graphLabelMap,
+}) => {
   const d3Container = useRef(null);
-
-  const line1 = datumsToPlot[0].slice(1);
 
   /**
    * The useEffect hooks is running side effects outside of React,
@@ -31,27 +36,30 @@ export const Chart: React.FC<{
    */
   useEffect(
     () => {
-      if (pointsToPlot && d3Container && d3Container.current) {
+      if (d3Container && d3Container.current) {
         const svg = d3.select(d3Container.current);
 
         // color source: https://www.materialui.co/colors
-        // const colors = [
-        //   "#e53935",
-        //   "#FB8C00",
-        //   "#FFEB3B",
-        //   "#8BC34A",
-        //   "#03A9F4",
-        //   "#BA68C8",
-        // ];
-        // var color = d3
-        //   .scaleLinear()
-        //   .domain(linesToPlot.map((d) => d.color))
-        //   // @ts-ignore
-        //   .range(colors);
+        const colors = [
+          "#e53935",
+          "#FB8C00",
+          "#FFEB3B",
+          "#8BC34A",
+          "#03A9F4",
+          "#BA68C8",
+        ];
+        var color = d3
+          .scaleLinear()
+          .domain([
+            -1, // buffer with a -1 in case the list of users is only of length 1, in which case we would not have a proper domain
+            ...Array.from(new Set(userPointsToPlot.map((d) => d.nameIndex))),
+          ])
+          // @ts-ignore
+          .range(colors);
 
         const [dxMin, dxMax] = [
-          Math.min(...pointsToPlot.map((p) => p.x)),
-          Math.max(...pointsToPlot.map((p) => p.x)),
+          Math.min(...graphPointsToPlot.map((p) => p.x)),
+          Math.max(...graphPointsToPlot.map((p) => p.x)),
         ];
         const [xMin, xMax] = [
           dxMin - (dxMax - dxMin) / 10,
@@ -64,8 +72,8 @@ export const Chart: React.FC<{
           .range([1.5 * PADDING, d3Container.current.clientWidth - PADDING]);
 
         const [dyMin, dyMax] = [
-          Math.min(...Object.keys(labelMap).map((k) => parseInt(k))),
-          Math.max(...Object.keys(labelMap).map((k) => parseInt(k))),
+          Math.min(...Object.keys(graphLabelMap).map((k) => parseInt(k))),
+          Math.max(...Object.keys(graphLabelMap).map((k) => parseInt(k))),
         ];
         const yStep = 1;
         const [yMin, yMax] = [dyMin - yStep, dyMax + yStep];
@@ -149,75 +157,105 @@ export const Chart: React.FC<{
           .attr("alignment-baseline", "middle")
           .attr("x", x(xMin) - 6)
           .attr("y", (d) => y(d))
-          .text((d) => labelMap[d] || "");
+          .text((d) => graphLabelMap[d] || "");
         yLabels
           .attr("x", x(xMin) - 6)
           .attr("y", (d) => y(d))
-          .text((d) => labelMap[d] || "");
+          .text((d) => graphLabelMap[d] || "");
         yLines.exit().remove();
         yLabels.exit().remove();
 
         // lines to plot
-        if (!svg.selectAll("g.lines").size())
-          svg.append("g").attr("class", "lines");
-        const linesGroup = svg.select("g.lines");
-        const lines = linesGroup.selectAll("polyline").data(linesToPlot);
-        lines
+        if (!svg.selectAll("g.graph-lines").size())
+          svg.append("g").attr("class", "graph-lines");
+        const graphLinesGroup = svg.select("g.graph-lines");
+        const graphLines = graphLinesGroup
+          .selectAll("polyline")
+          .data(graphLinesToPlot);
+        graphLines
           .enter()
           .append("polyline")
           .attr("fill", "transparent")
+          .attr("opacity", 0.5)
           .attr("stroke", (d) => "#666")
           .attr("stroke-width", 1)
           .attr("points", (d) =>
-            d.points.map(([a]) => `${x(a)},${y(d.y)}`).join(" ")
+            d.points.map((a) => `${x(a)},${y(d.y)}`).join(" ")
           );
-        lines.attr("points", (d) =>
-          d.points.map(([a]) => `${x(a)},${y(d.y)}`).join(" ")
+        graphLines.attr("points", (d) =>
+          d.points.map((a) => `${x(a)},${y(d.y)}`).join(" ")
         );
-        lines.exit().remove();
+        graphLines.exit().remove();
 
         // points to plot in the form of dots
-        if (!svg.selectAll("g.dots").size())
-          svg.append("g").attr("class", "dots");
-        const dotsGroup = svg.select("g.dots");
-        const dots = dotsGroup.selectAll("circle").data(pointsToPlot);
-        dots
+        if (!svg.selectAll("g.graph-dots").size())
+          svg.append("g").attr("class", "graph-dots");
+        const graphDotsGroup = svg.select("g.graph-dots");
+        const graphDots = graphDotsGroup
+          .selectAll("circle")
+          .data(graphPointsToPlot);
+        graphDots
           .enter()
           .append("circle")
-          .attr("r", 3)
+          .attr("r", 4)
+          .attr("opacity", 0.5)
           .attr("cx", (d) => x(d.x))
           .attr("cy", (d) => y(d.y))
           .attr("fill", "#666")
           .append("title")
           .text((d) => d.label);
-        dots
+        graphDots
           .attr("cx", (d) => x(d.x))
           .attr("cy", (d) => y(d.y))
           .select("title")
           .text((d) => d.label);
-        dots.exit().remove();
+        graphDots.exit().remove();
 
-        // // points to plot in the form of dots
-        // if (!svg.selectAll("g.points").size())
-        //   svg.append("g").attr("class", "points");
-        // const poitnsGroup = svg.select("g.points");
-        // const points = poitnsGroup.selectAll("circle").data(line1);
-        // points
-        //   .enter()
-        //   .append("circle")
-        //   .attr("r", 3)
-        //   .attr("cx", (d) => x(d))
-        //   .attr("cy", 100)
-        //   .attr("fill", "black")
-        //   .append("title")
-        //   .text((d) => "hello");
-        // points
-        //   .attr("cx", (d) => x(d))
-        //   .attr("cy", 100)
-        //   .attr("fill", "black")
-        //   .select("title")
-        //   .text((d) => "hello");
-        // points.exit().remove();
+        // more lines to plot to represent user tenures
+        if (!svg.selectAll("g.user-lines").size())
+          svg.append("g").attr("class", "user-lines");
+        const userLinesGroup = svg.select("g.user-lines");
+        const userLines = userLinesGroup
+          .selectAll("polyline")
+          .data(userLinesToPlot);
+        userLines
+          .enter()
+          .append("polyline")
+          .attr("fill", "transparent")
+          .attr("stroke", (d) => color(d.nameIndex))
+          .attr("stroke-width", 1)
+          .attr("points", (d) =>
+            d.points.map(({ x: dx, y: dy }) => `${x(dx)},${y(dy)}`).join(" ")
+          );
+        userLines.attr("points", (d) =>
+          d.points.map(({ x: dx, y: dy }) => `${x(dx)},${y(dy)}`).join(" ")
+        );
+        userLines.exit().remove();
+
+        // more points to plot in the form of dots
+        if (!svg.selectAll("g.user-dots").size())
+          svg.append("g").attr("class", "user-dots");
+        const userDotsGroup = svg.select("g.user-dots");
+        const userDots = userDotsGroup
+          .selectAll("circle")
+          .data(userPointsToPlot);
+        userDots
+          .enter()
+          .append("circle")
+          .attr("r", (d) => 2 + d.radius * 2)
+          .attr("cx", (d) => x(d.comp))
+          .attr("cy", (d) => y(d.levelIndex))
+          .attr("fill", (d) => color(d.nameIndex))
+          .append("title")
+          .text((d) => `${d.name} –– ${d.year}`);
+        userDots
+          .attr("r", (d) => 3 + d.radius * 2)
+          .attr("cx", (d) => x(d.comp))
+          .attr("cy", (d) => y(d.levelIndex))
+          .attr("fill", (d) => color(d.nameIndex))
+          .select("title")
+          .text((d) => `${d.name} –– ${d.year}`);
+        userDots.exit().remove();
       }
     },
 
@@ -226,7 +264,7 @@ export const Chart: React.FC<{
      * if the variables are valid, but we no longer need to compare old props to
      * new props to decide wether to re-render.
      */
-    [pointsToPlot, linesToPlot, labelMap, datumsToPlot]
+    [graphPointsToPlot, graphLinesToPlot, graphLabelMap, userPointsToPlot]
   );
 
   return (

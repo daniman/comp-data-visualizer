@@ -13,33 +13,54 @@ import { Chart } from "./Chart";
  * First row of the CSV is reserved for labels, and is not
  * interpreted as data to plot; rather the labels for that data.
  */
-const sampleGraphLabels = ["percentile", "L1", "L2", "L3", "L4", "L5"];
+const sampleGraphLabels = ["percentile", "E1", "E2", "E3", "E4", "E5", "E6"];
 const sampleGraphData = [
-  [2, 100000, 110000, 120000, 130000, 140000],
-  [4, 110000, 120000, 130000, 140000, 150000],
-  [6, 120000, 130000, 140000, 150000, 160000],
-  [8, 130000, 140000, 150000, 160000, 170000],
+  [10, 100000, 110000, 120000, 130000, 140000, 150000],
+  [25, 110000, 120000, 130000, 140000, 150000, 160000],
+  [50, 120000, 130000, 140000, 150000, 160000, 170000],
+  [75, 130000, 140000, 150000, 160000, 170000, 180000],
+  [100, 140000, 150000, 160000, 170000, 180000, 190000],
 ];
 
-const sampleDataLabels = ["name", "2016", "2017", "2018", "2019", "2020"];
+const sampleDataLabels = ["name", "2017", "2018", "2019", "2020"];
 const sampleDataPoints = [
-  [1, 100000, 110000, 120000, 130000, 140000, 150000],
-  [2, 200000, 210000, 220000, 230000, 240000, 250000],
+  ["pineapple", "105000@E1", "115000@E2", "120000@E2", "130000@E3"],
+  ["orange", "150000@E3", "150000@E3", "150000@E3", "150000@E3"],
+  ["apricot", "145000@E4", "150000@E5", "155000@E5", "160000@E5"],
 ];
 
 export interface LabelMap {
   [val: number]: string;
 }
 
-export interface Point {
+export interface GraphPoint {
   x: number;
   y: number;
   label: string;
 }
 
-export interface Line {
+export interface GraphLine {
   y: number;
-  points: number[][]; // [percentile, comp]
+  points: number[];
+}
+
+export interface UserLine {
+  name: string;
+  nameIndex: number;
+  points: {
+    label: string;
+    y: number;
+    x: number;
+  }[];
+}
+
+export interface UserPoint {
+  radius: number;
+  name: string;
+  year: string;
+  comp: number;
+  levelIndex: number;
+  nameIndex: number;
 }
 
 const DropZone: React.FC<{
@@ -48,6 +69,7 @@ const DropZone: React.FC<{
   update: (fileContents: string) => void;
 }> = ({ title, style = {}, update }) => {
   const [isDraggedOver, setIsDraggedOver] = useState(false);
+  const [fileName, setFileName] = useState("");
 
   return (
     <div
@@ -55,6 +77,7 @@ const DropZone: React.FC<{
         ...style,
         height: 100,
         padding: 10,
+        fontSize: 12,
         flex: 1,
         border: "1px solid #eee",
         display: "flex",
@@ -86,12 +109,11 @@ const DropZone: React.FC<{
 
         if (event.dataTransfer.files) {
           const file = event.dataTransfer.files[0];
-          console.log(file);
-
           if (file.type !== "text/csv") {
-            console.log("Cannot process this file.");
+            console.error("Cannot process this file.");
             return;
           }
+          setFileName(file.name);
 
           const reader = new FileReader();
           reader.addEventListener("load", function handleFileLoad(e) {
@@ -106,7 +128,8 @@ const DropZone: React.FC<{
       <span role="img" aria-label="open mailbox" style={{ fontSize: 48 }}>
         {isDraggedOver ? "📬" : "📭"}
       </span>
-      <span style={{ fontSize: 12 }}>{title}</span>
+      <span>{title}</span>
+      {fileName && <span>{fileName}</span>}
     </div>
   );
 };
@@ -114,22 +137,93 @@ const DropZone: React.FC<{
 function App() {
   const [graphlabels, setGraphLabels] = useState<string[]>(sampleGraphLabels);
   const [graphData, setGraphData] = useState<number[][]>(sampleGraphData);
-  const [pointLabels, setPointLabels] = useState<string[]>(sampleDataLabels);
-  const [pointData, setPointData] = useState<number[][]>(sampleDataPoints);
+  const [userLabels, setUserLabels] = useState<string[]>(sampleDataLabels);
+  const [userData, setUserData] = useState<string[][]>(sampleDataPoints);
 
-  const labelMap: LabelMap = {};
-  graphlabels.forEach((l, i) => {
+  const userLabelMap: LabelMap = {};
+  userLabels.forEach((l, i) => {
     if (i !== 0) {
-      labelMap[i] = l;
+      userLabelMap[i] = l;
     }
   });
+  const userLinesCache: {
+    [nameIndex: number]: {
+      y: number;
+      x: number;
+      label: string;
+    }[];
+  } = {};
+  const userPointsToPlot: UserPoint[] = [];
+  userData.forEach((row, i) => {
+    row.forEach((datum, j) => {
+      if (j !== 0) {
+        const [compStr, levelStr] = datum.split("@");
+        if (!compStr.replace(/\s/g, "").length) return; // empty cell in the csv data input
 
-  const linesCache: { [percentile: number]: number[][] } = {};
-  const pointsToPlot: Point[] = [];
+        const name = row[0];
+        const comp = parseInt(compStr);
+        const year = userLabels[j];
+        const levelIndex = graphlabels.findIndex(
+          (d) => d.replace(/\s/g, "") === levelStr
+        );
+        if (levelIndex < 0)
+          console.error(
+            `Cound not match user "${name}"'s ${comp.toLocaleString()} comp for ${year} to a known level. Received "${levelStr}", but expected something in the set "${graphlabels
+              .slice(1)
+              .join(", ")}".`
+          );
+
+        const repeatIndex = userPointsToPlot.findIndex(
+          (p) =>
+            p.comp === comp && p.name === name && p.levelIndex === levelIndex
+        );
+
+        if (repeatIndex >= 0) {
+          userPointsToPlot[repeatIndex].radius =
+            userPointsToPlot[repeatIndex].radius + 1;
+          userPointsToPlot[repeatIndex].year =
+            userPointsToPlot[repeatIndex].year + `, ${year}`;
+        } else {
+          userPointsToPlot.push({
+            radius: 1,
+            levelIndex,
+            comp,
+            year,
+            name,
+            nameIndex: i,
+          });
+
+          const pointsInLine = userLinesCache[i] || [];
+          pointsInLine.push({
+            y: levelIndex,
+            x: comp,
+            label: year,
+          });
+          userLinesCache[i] = pointsInLine;
+        }
+      }
+    });
+  });
+  const userLinesToPlot = Object.entries(userLinesCache).map(
+    ([nameIndex, points]) => ({
+      name: userData[parseInt(nameIndex)][0],
+      nameIndex: parseInt(nameIndex),
+      points,
+    })
+  );
+
+  const graphLabelMap: LabelMap = {};
+  graphlabels.forEach((l, i) => {
+    if (i !== 0) {
+      graphLabelMap[i] = l;
+    }
+  });
+  const graphLinesCache: { [percentile: number]: number[] } = {};
+  const graphPointsToPlot: GraphPoint[] = [];
   graphData.forEach((row, i) => {
     row.forEach((point, j) => {
       if (j !== 0) {
-        pointsToPlot.push({
+        graphPointsToPlot.push({
           x: point,
           y: j,
           label: `${graphlabels[j]}: ${
@@ -137,17 +231,18 @@ function App() {
           }th percentile, ${point.toLocaleString()}`,
         });
 
-        const pointsInLine = linesCache[j] || [];
-        pointsInLine.push([point, row[0]]); // x, y: percentile, comp
-        linesCache[j] = pointsInLine;
+        const pointsInLine = graphLinesCache[j] || [];
+        pointsInLine.push(point);
+        graphLinesCache[j] = pointsInLine;
       }
     });
   });
-
-  const linesToPlot = Object.entries(linesCache).map(([y, points]) => ({
-    y: parseInt(y),
-    points,
-  }));
+  const graphLinesToPlot = Object.entries(graphLinesCache).map(
+    ([y, points]) => ({
+      y: parseInt(y),
+      points,
+    })
+  );
 
   return (
     <div
@@ -161,10 +256,11 @@ function App() {
     >
       <div style={{ flex: 1, marginRight: 20 }}>
         <Chart
-          datumsToPlot={pointData}
-          pointsToPlot={pointsToPlot}
-          linesToPlot={linesToPlot}
-          labelMap={labelMap}
+          userPointsToPlot={userPointsToPlot}
+          userLinesToPlot={userLinesToPlot}
+          graphPointsToPlot={graphPointsToPlot}
+          graphLinesToPlot={graphLinesToPlot}
+          graphLabelMap={graphLabelMap}
         />
       </div>
       <div>
@@ -181,18 +277,14 @@ function App() {
             );
           }}
         />
-        {/* <DropZone
+        <DropZone
           title="Upload Data Points"
           update={(data) => {
             const rows = data.split("\n");
-            setPointLabels(rows[0].split(","));
-            setPointData(
-              rows
-                .splice(1)
-                .map((str) => str.split(",").map((i) => parseInt(i)))
-            );
+            setUserLabels(rows[0].split(","));
+            setUserData(rows.splice(1).map((str) => str.split(",")));
           }}
-        /> */}
+        />
       </div>
     </div>
   );
