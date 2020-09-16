@@ -264,7 +264,13 @@ export const Chart: React.FC<{
      * if the variables are valid, but we no longer need to compare old props to
      * new props to decide wether to re-render.
      */
-    [graphPointsToPlot, graphLinesToPlot, graphLabelMap, userPointsToPlot]
+    [
+      graphPointsToPlot,
+      graphLinesToPlot,
+      graphLabelMap,
+      userPointsToPlot,
+      userLinesToPlot,
+    ]
   );
 
   return (
